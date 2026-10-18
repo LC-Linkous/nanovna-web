@@ -20,8 +20,26 @@ const DEFAULTS = {
   overlayShow: true,      // draw the loaded .s1p overlay
 };
 
+// Allowed values per key. Anything that comes from outside the page (localStorage,
+// a loaded session file) goes through sanitize() so a bad value can neither break
+// the Settings panel (its radio selectors are built from theme / traces) nor leak
+// into the DOM. Unknown keys are dropped; bad values fall back to the default.
+const ENUMS = { theme: ['dark', 'light'], traces: ['instrument', 'blueamber'], palette: Object.keys(PALETTES), wfFloor: [-30, -40, -60, -80] };
+const BOOLS = ['rawBytes', 'beepDone', 'beepSwr', 'beepBrowser', 'mirrorTrace', 'overlayShow'];
+const NUMS = { z0: [1, 1e6], swrThreshold: [1, 1e3], brightness: [0, 1] };
+
+/** Validate an untrusted settings object; returns a clean copy of the accepted keys only. */
+export function sanitize(src) {
+  const out = {};
+  if (!src || typeof src !== 'object') return out;
+  for (const [k, allowed] of Object.entries(ENUMS)) if (allowed.includes(src[k])) out[k] = src[k];
+  for (const k of BOOLS) if (typeof src[k] === 'boolean') out[k] = src[k];
+  for (const [k, [lo, hi]] of Object.entries(NUMS)) { const v = src[k]; if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(hi, Math.max(lo, v)); }
+  return out;
+}
+
 export const settings = { ...DEFAULTS };
-try { Object.assign(settings, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
+try { Object.assign(settings, sanitize(JSON.parse(localStorage.getItem(KEY) || '{}'))); } catch {}
 settings.maxMarkers = DEFAULTS.maxMarkers;   // not user-editable yet
 
 export function save() { try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {} }
@@ -33,7 +51,11 @@ export function applyTheme() {
   root.setAttribute('data-traces', settings.traces);
 }
 
-/** Wire the settings form. onChange(key) is called after any change. */
+/**
+ * Wire the settings form. onChange(key) is called after any change.
+ * Returns { refresh } so the form can be re-synced after settings change
+ * elsewhere (e.g. a loaded session file).
+ */
 export function initSettingsPanel(form, onChange) {
   const sel = form.querySelector('[name=palette]');
   sel.innerHTML = Object.entries(PALETTES).map(([k, p]) => `<option value="${k}">${p.name}</option>`).join('');
@@ -61,4 +83,5 @@ export function initSettingsPanel(form, onChange) {
     save(); applyTheme(); swatch.style.background = cssGradient(settings.palette); onChange(n);
   });
   form.addEventListener('submit', e => e.preventDefault());
+  return { refresh };
 }

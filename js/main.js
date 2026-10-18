@@ -10,7 +10,7 @@ import { renderSmith } from './plot/smith.js';
 import { renderWaterfall, WATERFALL_ROWS } from './plot/waterfall.js';
 import { buildLut, cssGradient } from './plot/palettes.js';
 import { cssVar } from './plot/common.js';
-import { settings, applyTheme, initSettingsPanel, save as saveSettings } from './ui/settings.js';
+import { settings, applyTheme, initSettingsPanel, save as saveSettings, sanitize as sanitizeSettings } from './ui/settings.js';
 import { initConsole } from './ui/console.js';
 import { initSidebar } from './ui/sidebar.js';
 import { collectDiagnostics } from './ui/diagnostics.js';
@@ -242,7 +242,13 @@ function buildLegend() {
   else if (v !== 'cw') items = [['--s11', v === 'swr' ? 'SWR from S11' : v === 'phase' ? 'S11 phase' : v === 'smith' ? 'S11 on the Smith chart' : '|S11|']];
   if (state.held && v !== 'waterfall' && v !== 'cw') items.push(['--held', 'held trace']);
   if (state.overlay && settings.overlayShow && v !== 'waterfall' && v !== 'cw') items.push(['--overlay', `overlay: ${state.overlay.name}`]);
-  $('legend').innerHTML = items.map(([c, l]) => `<span><i style="${c.startsWith('--') ? 'background:' + cssVar(c) : c}"></i>${l}</span>`).join('');
+  // Built from DOM nodes, not innerHTML: the overlay name is user-supplied (filename or session JSON).
+  $('legend').replaceChildren(...items.map(([c, l]) => {
+    const span = document.createElement('span'), i = document.createElement('i');
+    i.style.cssText = c.startsWith('--') ? 'background:' + cssVar(c) : c;
+    span.append(i, l);
+    return span;
+  }));
 }
 async function syncMarkersToDevice() {
   const vna = state.vna, sw = state.sweep; if (!vna || !sw || state.busy) return; state.busy = true;
@@ -270,7 +276,7 @@ async function loadSession() {
     const d = parseSession(await file.text());
     if (d.sweep) acceptSweep(d.sweep); state.held = d.held || null; $('holdBtn').setAttribute('aria-pressed', String(!!state.held));
     state.markers = Array.isArray(d.markers) ? d.markers.slice(0, settings.maxMarkers) : [];
-    if (d.settings) { Object.assign(settings, d.settings); saveSettings(); applyTheme(); state.lut = buildLut(settings.palette); }
+    if (d.settings) { Object.assign(settings, sanitizeSettings(d.settings)); saveSettings(); applyTheme(); settingsPanel.refresh(); state.lut = buildLut(settings.palette); }
     setOverlay(d.overlay || null); renderMarkers(); buildLegend(); chart.dirty = true;
     con.dim(`session loaded: ${file.name} (${d.when || 'no date'})`);
   } catch (e) { con.err('session: ' + e.message); }
@@ -312,7 +318,7 @@ $('sessLoad').addEventListener('click', loadSession);
 $('ovlLoad').addEventListener('click', loadOverlay);
 $('ovlClear').addEventListener('click', () => setOverlay(null));
 $('ptsCustom').addEventListener('focus', () => { document.querySelector('input[name=pts][value=custom]').checked = true; });
-initSettingsPanel($('settingsForm'), key => {
+const settingsPanel = initSettingsPanel($('settingsForm'), key => {
   if (key === 'palette') state.lut = buildLut(settings.palette);
   if (key === 'z0') renderMarkers();
   if (key === 'brightness' && state.vna && !state.busy) state.vna.pwm(settings.brightness).catch(e => con.err('pwm: ' + e.message));

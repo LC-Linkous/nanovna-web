@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Security: the plot legend is now built from DOM text nodes instead of
+  `innerHTML`. The overlay name it shows comes from a loaded file (the `.s1p`
+  filename, or `overlay.name` in a session JSON), so a crafted file could run
+  script in the page.
+- Settings loaded from a session file or from localStorage are validated
+  against an allowlist (known keys, known enum values, clamped numbers). A
+  session with an unexpected `theme` value used to throw while building the
+  Settings panel on the next load, which left the plot blank until site data
+  was cleared.
+- Loading a session now refreshes the Settings form, so the controls show the
+  values the session applied instead of the ones from before the load.
+
 ## v0.4.2
 
 - About page: *About* at the foot of the sidebar (or `#about` in the URL) swaps the plot
