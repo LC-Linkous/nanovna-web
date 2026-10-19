@@ -82,11 +82,11 @@ connection (or the Python script) before starting the other.
 ┌──────────────────────────────────────────────────────────────┐
 │ nanoVNA Web      [Connect] [Demo]  Model ▾   ● status         │
 ├────────────┬─────────────────────────────────────────────────┤
-│ Sweep      │  |S11| |S21| SWR Phase Smith Waterfall CW  Hold │
-│  start/stop│                                                 │
-│  points    │                    plot                         │
-│  [Single]  │              (or the CW meter)                  │
-│  [Contin.] │                                                 │
+│ Sweep      │ Windows [1][2][4]                    Hold Clear │
+│  start/stop│ ┌ |S11| SWR Smith … ─┐ ┌ |S11| SWR Smith … ─┐   │
+│  points    │ │                    │ │                    │   │
+│  [Single]  │ │       plot         │ │   plot / CW meter  │   │
+│  [Contin.] │ └────────────────────┘ └────────────────────┘   │
 │ ────────── │                                                 │
 │ Calibration├─────────────────────────────────────────────────┤
 │ ────────── │  Markers  [min SWR] [peak] [send to device]     │
@@ -104,18 +104,27 @@ connection (or the Python script) before starting the other.
 └────────────┴─────────────────────────────────────────────────┘
 ```
 
+Each window has its own view tabs; *Windows 1 / 2 / 4* sets how many. Two
+windows sit side by side (stacked on a narrow screen), four in a grid: |S11|
+next to the Smith chart, or SWR over the waterfall, from the same sweep. A
+hover in one window highlights the same point in all of them, a click places
+a marker from any of them, and the layout and views are remembered. The CW
+meter is a view like the others and lives in whichever window selects it.
+
 The sidebar is an accordion — click a header to open it, click again to
 collapse; the choice is remembered. Drag its right edge to resize it
 (double-click the edge to reset). The markers table sits between the plot and
 the console so it has the full width. On narrow screens the sidebar stacks
 above the plot.
 
-## What it does (v0.4)
+## What it does (v0.5)
 
 - **Sweep** — start/stop in MHz, points by model maximum / quick / custom,
   single or continuous.
-- **Views** — |S11| dB, |S21| dB, SWR, S11 phase, Smith chart, waterfall
-  (rolling |S11| history). *Hold* keeps a trace for comparison.
+- **Views, in 1 / 2 / 4 windows** — |S11| dB, |S21| dB, SWR, S11 phase, Smith
+  chart, waterfall (rolling |S11| history), CW meter; each window shows its own
+  view of the same sweep, so two or four can be compared side by side. *Hold*
+  keeps a trace for comparison in every window.
 - **Markers** — click to place up to six; each shows frequency, |S11|, SWR,
   R, X, |S21| and phase. *Mark minimum SWR* and *Mark |S11| peak* find them
   for you; *Send first 4 to device* sets the instrument's sweep to match and
@@ -179,6 +188,7 @@ css/
   theme.css                colour tokens: dark/light themes, trace colour schemes
   layout.css               top bar, docked sidebar, plot, console drawer
   components.css           buttons, inputs, tables
+  panes.css                the 1 / 2 / 4 window grid (shared with tinysa-web)
 js/
   main.js                  app state + wiring
   rf.js                    pure math: dB, SWR, Γ→Z, formatting
@@ -191,7 +201,7 @@ js/
   plot/
     rect.js  smith.js  waterfall.js  palettes.js  common.js
   ui/
-    sidebar.js  console.js  settings.js  diagnostics.js  export.js
+    sidebar.js  console.js  panes.js  settings.js  diagnostics.js  export.js
     calibration.js  cw.js  session.js  devicetools.js  recorder.js  about.js
 ```
 

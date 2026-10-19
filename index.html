@@ -16,6 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/theme.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/panes.css">
 <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
@@ -241,14 +242,11 @@
     <section class="about" id="about" aria-label="About nanoVNA Web" hidden></section>
     <div class="plot-area" id="plotArea">
       <div class="chart-head">
-        <div class="views" role="group" aria-label="Trace view">
-          <button class="btn small" data-view="s11db" aria-pressed="true">|S11| dB</button>
-          <button class="btn small" data-view="s21db" aria-pressed="false">|S21| dB</button>
-          <button class="btn small" data-view="swr" aria-pressed="false">SWR</button>
-          <button class="btn small" data-view="phase" aria-pressed="false">Phase</button>
-          <button class="btn small" data-view="smith" aria-pressed="false">Smith</button>
-          <button class="btn small" data-view="waterfall" aria-pressed="false">Waterfall</button>
-          <button class="btn small" data-view="cw" aria-pressed="false">CW meter</button>
+        <div class="views" role="group" aria-label="Windows">
+          <span class="suffix" style="align-self:center">Windows</span>
+          <button class="btn small" data-layout="1" aria-pressed="true" title="One window">1</button>
+          <button class="btn small" data-layout="2" aria-pressed="false" title="Two windows side by side (stacked on a narrow screen)">2</button>
+          <button class="btn small" data-layout="4" aria-pressed="false" title="Four windows">4</button>
         </div>
         <div class="tools">
           <button class="btn small" id="holdBtn" aria-pressed="false" title="Keep the current trace on screen for comparison">Hold</button>
@@ -256,10 +254,8 @@
         </div>
       </div>
       <div class="legend" id="legend"></div>
-      <div class="chart-wrap" id="chartWrap">
-        <canvas id="plot" role="img" aria-label="VNA trace plot"></canvas>
-        <div class="tip" id="tip"></div>
-      </div>
+      <div class="panes" id="panes"></div>
+      <!-- the CW meter is a panel, not a drawing: it is moved into whichever window selects "CW meter" -->
       <div class="cw-panel" id="cwPanel" hidden>
         <div style="grid-column:1/-1" class="row">
           <label for="cwFreq" class="suffix">Frequency</label><input type="number" id="cwFreq" value="433" min="0.05" step="any" style="max-width:160px"><span class="suffix">MHz</span>

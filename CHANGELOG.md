@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.0 — windows
+
+- **Windows**: the plot area is 1, 2 or 4 panes, each with its own view tabs
+  (|S11|, |S21|, SWR, phase, Smith, waterfall, CW meter), so two views of
+  the same sweep sit side by side: |S11| next to the Smith chart, SWR over
+  the waterfall. Two windows are side by side on a wide screen and stacked on
+  a narrow one; four are a grid. Hover highlights the same point in every
+  window; a click in any window places a marker; the layout and views are
+  remembered. The CW meter is a view like the others: it lives in whichever
+  window selects it (the first, if several do), and stops when none does.
+  Ported from tinysa-web's `panes.js` / `panes.css`, now parameterised so the
+  same two files serve both tools.
+- The legend describes what the open windows show; *Save plot PNG* saves the
+  first window that is a drawing.
+- `shell-link.js` brought back to byte parity with tinysa-web (the rule for
+  the shared files): `quiet` on `commandBinary`, `requireEcho` and
+  `terminators` options on `command()` (off by default, so NanoVNA behaviour
+  is unchanged), and every command serialised through one queue, so a
+  background poll can no longer interleave with a user command.
+
 ## Unreleased
 
 - Security: the plot legend is now built from DOM text nodes instead of

@@ -21,8 +21,9 @@ import { sessionBlob, parseSession, parseTouchstone, pickFile } from './ui/sessi
 import { initDeviceTools } from './ui/devicetools.js';
 import { createRecorder } from './ui/recorder.js';
 import { initAbout } from './ui/about.js';
+import { createPanes } from './ui/panes.js';
 
-const APP_VERSION = '0.4.2';
+const APP_VERSION = '0.5.0';
 const $ = id => document.getElementById(id);
 const VIEW_TO_TRACE = { s11db: 'logmag', s21db: 'logmag', swr: 'swr', phase: 'phase', smith: 'smith', waterfall: 'logmag' };
 
@@ -30,10 +31,10 @@ const VIEW_TO_TRACE = { s11db: 'logmag', s21db: 'logmag', swr: 'swr', phase: 'ph
 const state = {
   vna: null, demo: false,
   sweep: null, held: null, overlay: null, history: [], markers: [],
-  view: 's11db', continuous: false, busy: false, diag: null,
+  continuous: false, busy: false, diag: null,
   lut: buildLut(settings.palette), swrArmed: true,
 };
-const chart = { dirty: true, hover: null, geom: null };
+const chart = { dirty: true, hover: null, geoms: [] };
 
 applyTheme();
 const sidebar = initSidebar($('sidebar'));
@@ -55,6 +56,11 @@ $('freezeBtn').addEventListener('click', async () => { const v = state.vna; if (
 const recorder = createRecorder();
 const cw = initCw($('cwPanel'), () => state.vna, () => settings.z0, con, m => recorder.addCw(m));
 const tools = initDeviceTools($('toolsSection'), () => state.vna, con);
+const VIEWS = { s11db: '|S11| dB', s21db: '|S21| dB', swr: 'SWR', phase: 'Phase', smith: 'Smith', waterfall: 'Waterfall', cw: 'CW meter' };
+const panes = createPanes($('panes'), VIEWS, () => { wirePanes(); placeCw(); buildLegend(); chart.dirty = true; mirrorFirstView(); },
+  { key: 'nanovna-web.panes', defaults: ['s11db', 'smith', 'swr', 's21db'] });
+/** The first window's view stands in wherever one view is needed (legend, PNG name, device trace mirroring). */
+const mainView = () => panes.panes[0].view;
 initAbout($('about'), $('aboutLink'), [$('plotArea'), $('markersPanel')], { version: APP_VERSION });
 
 // ---------------------------------------------------------------- model / status
@@ -179,47 +185,64 @@ async function readDeviceData() {
   } catch (e) { con.err(e.message); } finally { state.busy = false; }
 }
 
-// ---------------------------------------------------------------- chart
-const canvas = $('plot'), tip = $('tip');
-function renderChart() {
-  const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+// ---------------------------------------------------------------- chart (panes)
+function renderPane(pane) {
+  const v = pane.view; if (v === 'cw') return null;
+  const canvas = pane.canvas, dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+  if (!W || !H) return null;
   if (canvas.width !== W * dpr || canvas.height !== H * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
   const sw = state.sweep, ov = settings.overlayShow && state.overlay ? state.overlay.sweep : null;
-  if (!sw) { ctx.font = '13px ' + cssVar('--font'); ctx.fillStyle = cssVar('--ink-3'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(state.vna ? 'Run a sweep.' : 'Connect a NanoVNA or try the demo.', W / 2, H / 2); chart.geom = null; return; }
-  if (state.view === 'smith') chart.geom = renderSmith(ctx, W, H, sw, state.held, state.markers, chart.hover, settings.z0, ov);
-  else if (state.view === 'waterfall') chart.geom = renderWaterfall(ctx, W, H, sw, state.history, state.markers, chart.hover, state.lut, settings.wfFloor);
-  else chart.geom = renderRect(ctx, W, H, state.view, sw, state.held, state.markers, chart.hover, ov);
+  if (!sw) { ctx.font = '13px ' + cssVar('--font'); ctx.fillStyle = cssVar('--ink-3'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(state.vna ? 'Run a sweep.' : 'Connect a NanoVNA or try the demo.', W / 2, H / 2); return null; }
+  if (v === 'smith') return renderSmith(ctx, W, H, sw, state.held, state.markers, chart.hover, settings.z0, ov);
+  if (v === 'waterfall') return renderWaterfall(ctx, W, H, sw, state.history, state.markers, chart.hover, state.lut, settings.wfFloor);
+  return renderRect(ctx, W, H, v, sw, state.held, state.markers, chart.hover, ov);
 }
-function tick() { if (chart.dirty && state.view !== 'cw') { chart.dirty = false; renderChart(); } requestAnimationFrame(tick); }
-new ResizeObserver(() => chart.dirty = true).observe(canvas);
+function renderAll() { chart.geoms = panes.panes.map(renderPane); }
+function tick() { if (chart.dirty) { chart.dirty = false; renderAll(); } requestAnimationFrame(tick); }
+const resizer = new ResizeObserver(() => chart.dirty = true);
 
-function pointAt(e) {
-  const sw = state.sweep, g = chart.geom; if (!sw || !g) return null;
-  const r = canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+function pointAt(pane, e) {
+  const sw = state.sweep, g = chart.geoms[pane.i]; if (!sw || !g) return null;
+  const r = pane.canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
   if (g.smith) { let b = null, bd = 18 * 18; for (let i = 0; i < sw.pts; i++) { const [x, y] = g.gx(sw.s11[2 * i], sw.s11[2 * i + 1]); const d = (x - mx) ** 2 + (y - my) ** 2; if (d < bd) { bd = d; b = i; } } return b; }
   if (mx < g.pad.l || mx > g.pad.l + g.pw) return null;
   return nearestIndex(sw.f, g.fx(mx));
 }
-canvas.addEventListener('pointermove', e => {
-  const i = pointAt(e); if (i !== chart.hover) { chart.hover = i; chart.dirty = true; }
-  if (i == null) { tip.style.display = 'none'; return; }
-  const sw = state.sweep, re = sw.s11[2 * i], im = sw.s11[2 * i + 1], g = chart.geom;
-  let x, y; if (g.smith) [x, y] = g.gx(re, im); else { x = g.sx(sw.f[i]); y = g.sy(g.yOf(i)); }
-  tip.style.display = 'block'; tip.style.left = x + 'px'; tip.style.top = y + 'px';
-  tip.textContent = `${fmtHz(sw.f[i])}  ${db(re, im).toFixed(2)} dB  SWR ${swr(re, im).toFixed(2)}  ${fmtZ(gammaToZ(re, im, settings.z0))}`;
-});
-canvas.addEventListener('pointerleave', () => { chart.hover = null; chart.dirty = true; tip.style.display = 'none'; });
-canvas.addEventListener('click', e => { const i = pointAt(e); if (i == null) return; addMarker(state.sweep.f[i]); });
-
-function setView(v) {
-  state.view = v;
-  document.querySelectorAll('.views button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.view === v)));
-  const isCw = v === 'cw'; $('chartWrap').hidden = isCw; $('cwPanel').hidden = !isCw; $('legend').hidden = isCw;
-  if (!isCw) cw.stop();
-  buildLegend(); chart.dirty = true;
-  if (settings.mirrorTrace && state.vna && VIEW_TO_TRACE[v] && !state.busy) state.vna.trace(0, VIEW_TO_TRACE[v]).catch(() => {});
+/** Pointer handlers for every pane; a hover in one window highlights the same point in all of them. */
+function wirePanes() {
+  for (const pane of panes.panes) {
+    if (pane.wired) continue; pane.wired = true; resizer.observe(pane.canvas);
+    pane.canvas.addEventListener('pointermove', e => {
+      const i = pointAt(pane, e); if (i !== chart.hover) { chart.hover = i; chart.dirty = true; }
+      if (i == null) { pane.tip.style.display = 'none'; return; }
+      const sw = state.sweep, re = sw.s11[2 * i], im = sw.s11[2 * i + 1], g = chart.geoms[pane.i];
+      let x, y; if (g.smith) [x, y] = g.gx(re, im); else { x = g.sx(sw.f[i]); y = g.sy(g.yOf(i)); }
+      pane.tip.style.display = 'block'; pane.tip.style.left = x + 'px'; pane.tip.style.top = y + 'px';
+      pane.tip.textContent = `${fmtHz(sw.f[i])}  ${db(re, im).toFixed(2)} dB  SWR ${swr(re, im).toFixed(2)}  ${fmtZ(gammaToZ(re, im, settings.z0))}`;
+    });
+    pane.canvas.addEventListener('pointerleave', () => { chart.hover = null; chart.dirty = true; pane.tip.style.display = 'none'; });
+    pane.canvas.addEventListener('click', e => { const i = pointAt(pane, e); if (i == null) return; addMarker(state.sweep.f[i]); });
+  }
+  document.querySelectorAll('[data-layout]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.layout === panes.layout)));
 }
+/**
+ * The CW meter is a DOM panel, not a drawing. It lives in whichever window
+ * selects "CW meter" (the first one, if several do; the others say so). When
+ * no window shows it, it goes back to its hidden home and the meter stops.
+ */
+// Held by reference: a layout change rebuilds the panes (innerHTML = ''), which
+// detaches whatever slot the panel was in, and the node is re-attached from here.
+const cwPanel = $('cwPanel'), cwHome = cwPanel.parentElement;
+function placeCw() {
+  const owners = panes.panes.filter(p => p.view === 'cw');
+  for (const p of panes.panes) { if (p.slot.firstChild !== cwPanel) p.slot.innerHTML = ''; }
+  if (!owners.length) { if (cwPanel.parentElement !== cwHome) cwHome.appendChild(cwPanel); cwPanel.hidden = true; cw.stop(); return; }
+  if (owners[0].slot.firstChild !== cwPanel) { owners[0].slot.innerHTML = ''; owners[0].slot.appendChild(cwPanel); }
+  cwPanel.hidden = false;
+  for (const p of owners.slice(1)) { p.slot.innerHTML = '<div class="pane-note">The CW meter is open in another window.</div>'; }
+}
+function mirrorFirstView() { const v = mainView(); if (settings.mirrorTrace && state.vna && VIEW_TO_TRACE[v] && !state.busy) state.vna.trace(0, VIEW_TO_TRACE[v]).catch(() => {}); }
 
 // ---------------------------------------------------------------- markers
 function addMarker(f) { if (state.markers.length >= settings.maxMarkers) state.markers.shift(); state.markers.push(f); renderMarkers(); chart.dirty = true; }
@@ -236,12 +259,13 @@ function renderMarkers() {
   $('syncMarkersBtn').textContent = `Send first ${state.vna ? (state.vna.env.markers || 4) : 4} to device`;
 }
 function buildLegend() {
-  const v = state.view; let items = [];
-  if (v === 's21db') items = [['--s21', '|S21|']];
-  else if (v === 'waterfall') items = [['--s11', '|S11| now'], [`background:${cssGradient(settings.palette)}`, `0 dB → ${settings.wfFloor} dB`]];
-  else if (v !== 'cw') items = [['--s11', v === 'swr' ? 'SWR from S11' : v === 'phase' ? 'S11 phase' : v === 'smith' ? 'S11 on the Smith chart' : '|S11|']];
-  if (state.held && v !== 'waterfall' && v !== 'cw') items.push(['--held', 'held trace']);
-  if (state.overlay && settings.overlayShow && v !== 'waterfall' && v !== 'cw') items.push(['--overlay', `overlay: ${state.overlay.name}`]);
+  const views = [...new Set(panes.panes.map(p => p.view))]; let items = [];
+  const plotted = views.filter(v => v !== 'cw');
+  if (plotted.some(v => v !== 's21db' && v !== 'waterfall')) items.push(['--s11', plotted.length === 1 ? (plotted[0] === 'swr' ? 'SWR from S11' : plotted[0] === 'phase' ? 'S11 phase' : plotted[0] === 'smith' ? 'S11 on the Smith chart' : '|S11|') : 'S11 (|S11|, SWR, phase, Smith as each window shows it)']);
+  if (plotted.includes('s21db')) items.push(['--s21', '|S21|']);
+  if (plotted.includes('waterfall')) items.push(['--s11', '|S11| now'], [`background:${cssGradient(settings.palette)}`, `0 dB → ${settings.wfFloor} dB`]);
+  if (state.held && plotted.some(v => v !== 'waterfall')) items.push(['--held', 'held trace']);
+  if (state.overlay && settings.overlayShow && plotted.some(v => v !== 'waterfall')) items.push(['--overlay', `overlay: ${state.overlay.name}`]);
   // Built from DOM nodes, not innerHTML: the overlay name is user-supplied (filename or session JSON).
   $('legend').replaceChildren(...items.map(([c, l]) => {
     const span = document.createElement('span'), i = document.createElement('i');
@@ -298,7 +322,7 @@ $('singleBtn').addEventListener('click', () => doSweep());
 $('contBtn').addEventListener('click', () => { if (state.continuous) stopContinuous(); else { state.continuous = true; continuousLoop(); } });
 $('devSweepBtn').addEventListener('click', useDeviceSweep);
 $('devDataBtn').addEventListener('click', readDeviceData);
-document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+document.querySelectorAll('[data-layout]').forEach(b => b.addEventListener('click', () => panes.setLayout(+b.dataset.layout)));
 $('holdBtn').addEventListener('click', () => { if (state.held) state.held = null; else if (state.sweep) state.held = { ...state.sweep, f: state.sweep.f.slice(), s11: state.sweep.s11.slice(), s21: state.sweep.s21.slice() }; $('holdBtn').setAttribute('aria-pressed', String(!!state.held)); buildLegend(); chart.dirty = true; });
 $('clearBtn').addEventListener('click', () => { state.sweep = null; state.held = null; state.history = []; state.markers = []; $('holdBtn').setAttribute('aria-pressed', 'false'); renderMarkers(); buildLegend(); chart.dirty = true; ['csvBtn', 's1pBtn', 's2pBtn', 'pngBtn', 'clearBtn', 'minSwrBtn', 'peakBtn', 'clearMarkersBtn'].forEach(id => $(id).disabled = true); });
 $('minSwrBtn').addEventListener('click', () => { if (state.sweep) addMarker(state.sweep.f[minSwrIndex(state.sweep)]); });
@@ -309,7 +333,7 @@ $('markerBody').addEventListener('click', e => { const b = e.target.closest('but
 $('csvBtn').addEventListener('click', () => download(`nanovna-${stamp()}.csv`, csvBlob(state.sweep, settings.z0)));
 $('s1pBtn').addEventListener('click', () => download(`nanovna-${stamp()}.s1p`, touchstoneBlob(state.sweep, settings.z0, 1, `${state.vna?.env.name || ''} — ${state.vna?.ident.label || ''}`)));
 $('s2pBtn').addEventListener('click', () => download(`nanovna-${stamp()}.s2p`, touchstoneBlob(state.sweep, settings.z0, 2, `${state.vna?.env.name || ''} — ${state.vna?.ident.label || ''}`)));
-$('pngBtn').addEventListener('click', () => canvasPng(canvas, `nanovna-${state.view}-${stamp()}.png`));
+$('pngBtn').addEventListener('click', () => { const p = panes.panes.find(x => x.view !== 'cw') || panes.panes[0]; canvasPng(p.canvas, `nanovna-${p.view}-${stamp()}.png`); });
 $('shotBtn').addEventListener('click', async () => { if (!state.vna || state.busy) return; state.busy = true; try { const img = await state.vna.capture(); rgbaToPngDownload(img, `nanovna-screen-${stamp()}.png`); con.dim(`capture: ${img.width}×${img.height} in ${img.ms.toFixed(0)} ms`); } catch (e) { con.err('screenshot failed: ' + e.message); } finally { state.busy = false; } });
 $('diagBtn').addEventListener('click', async () => { if (!state.vna || state.busy) return; state.busy = true; state.diag = null; $('diagBtn').disabled = true; $('diagDlBtn').disabled = true; $('diagOut').hidden = false; $('diagOut').textContent = 'collecting… (each command waits up to 8 s if the device is silent)'; try { state.diag = await collectDiagnostics(state.vna, sweepParams(), t => $('diagOut').textContent = t); } catch (e) { $('diagOut').textContent += '\nfailed: ' + e.message; } finally { state.busy = false; $('diagBtn').disabled = false; $('diagDlBtn').disabled = !state.diag; } });
 $('diagDlBtn').addEventListener('click', () => state.diag && download(`nanovna-diag-${stamp()}.json`, new Blob([JSON.stringify(state.diag, null, 2)], { type: 'application/json' })));
@@ -322,7 +346,7 @@ const settingsPanel = initSettingsPanel($('settingsForm'), key => {
   if (key === 'palette') state.lut = buildLut(settings.palette);
   if (key === 'z0') renderMarkers();
   if (key === 'brightness' && state.vna && !state.busy) state.vna.pwm(settings.brightness).catch(e => con.err('pwm: ' + e.message));
-  if (key === 'mirrorTrace' && settings.mirrorTrace && state.vna && VIEW_TO_TRACE[state.view]) state.vna.trace(0, VIEW_TO_TRACE[state.view]).catch(() => {});
+  if (key === 'mirrorTrace') mirrorFirstView();
   buildLegend(); chart.dirty = true;
 });
 window.addEventListener('beforeunload', () => { if (state.vna && !state.demo) state.vna.link.writeSync('resume\r\n'); });
@@ -348,4 +372,4 @@ window.addEventListener('beforeunload', e => { if (recorder.on && recorder.sweep
 refreshRec();
 
 $('appVersion').textContent = 'v' + APP_VERSION;
-applyModel(DEFAULT_MODEL); setView('s11db'); renderMarkers(); setOverlay(null); tick();
+applyModel(DEFAULT_MODEL); wirePanes(); placeCw(); renderMarkers(); setOverlay(null); buildLegend(); tick();
