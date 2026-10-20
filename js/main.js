@@ -22,8 +22,9 @@ import { initDeviceTools } from './ui/devicetools.js';
 import { createRecorder } from './ui/recorder.js';
 import { initAbout } from './ui/about.js';
 import { createPanes } from './ui/panes.js';
+import { createClip } from './ui/clip.js';
 
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.6.0';
 const $ = id => document.getElementById(id);
 const VIEW_TO_TRACE = { s11db: 'logmag', s21db: 'logmag', swr: 'swr', phase: 'phase', smith: 'smith', waterfall: 'logmag' };
 
@@ -129,6 +130,7 @@ function sweepParams() {
   return { start: parseFloat($('fStart').value) * 1e6, stop: parseFloat($('fStop').value) * 1e6, pts: Math.min(Math.max(pts, m.minPts), m.maxPts) };
 }
 function acceptSweep(sw) {
+  if (clip.replaying) { recorder.addSweep(sw); return; }   // replaying a recording: keep recording, leave the display to the replay
   state.sweep = sw; recorder.addSweep(sw);
   $('sweepTime').textContent = `${(sw.ms / 1000).toFixed(2)} s · ${sw.pts} pts`;
   const row = new Float32Array(sw.pts); for (let i = 0; i < sw.pts; i++) row[i] = db(sw.s11[2 * i], sw.s11[2 * i + 1]);
@@ -198,7 +200,7 @@ function renderPane(pane) {
   if (v === 'waterfall') return renderWaterfall(ctx, W, H, sw, state.history, state.markers, chart.hover, state.lut, settings.wfFloor);
   return renderRect(ctx, W, H, v, sw, state.held, state.markers, chart.hover, ov);
 }
-function renderAll() { chart.geoms = panes.panes.map(renderPane); }
+function renderAll() { chart.geoms = panes.panes.map(renderPane); clip?.onFrame(); }
 function tick() { if (chart.dirty) { chart.dirty = false; renderAll(); } requestAnimationFrame(tick); }
 const resizer = new ResizeObserver(() => chart.dirty = true);
 
@@ -360,7 +362,36 @@ function refreshRec() {
   $('recBadge').hidden = !recorder.on; $('recBadge').textContent = `● REC ${n + c}`;
   $('recWfBtn').disabled = $('recWf21Btn').disabled = $('recSweepsBtn').disabled = !n; $('recCwBtn').disabled = !c; $('recJsonBtn').disabled = $('recClearBtn').disabled = !any;
 }
-recorder.onChange = refreshRec;
+recorder.onChange = () => { refreshRec(); clip.refresh(); };
+// ---------------------------------------------------------------- replay & clip
+// Replay swaps the live sweep/history for a frame of the recording and renders
+// the windows synchronously; the live state is restored on exit.
+const live = { saved: null };
+function replayFrame(i) {
+  const recs = recorder.sweeps, s = recs[i]; if (!s) return;
+  if (!live.saved) live.saved = { sweep: state.sweep, history: state.history };
+  const row = sw => { const r = new Float32Array(sw.pts); for (let k = 0; k < sw.pts; k++) r[k] = db(sw.s11[2 * k], sw.s11[2 * k + 1]); return r; };
+  const history = []; for (let k = i; k >= 0 && history.length < WATERFALL_ROWS; k--) if (recs[k].pts === s.pts) history.push(row(recs[k]));
+  state.sweep = { ...s, ms: 0 }; state.history = history;
+  $('sweepTime').textContent = `replay ${i + 1} / ${recs.length} · ${new Date(s.t).toLocaleTimeString()}`;
+  renderMarkers(); renderAll();
+}
+function replayExit() {
+  if (!live.saved) return;
+  Object.assign(state, live.saved); live.saved = null;
+  $('sweepTime').textContent = state.sweep ? `${state.sweep.pts} pts` : '—';
+  renderMarkers(); chart.dirty = true;
+}
+const clip = createClip(
+  { slider: $('clipSlider'), playBtn: $('clipPlayBtn'), speedSel: $('clipSpeed'), posLabel: $('clipPos'), exitBtn: $('clipExitBtn'), exportBtn: $('clipExportBtn'), liveBtn: $('clipLiveBtn'), stampChk: $('clipStamp'), status: $('clipStatus') },
+  { name: 'nanovna', panesEl: $('panes'), getPanes: () => panes.panes, count: () => recorder.sweeps.length, timeAt: i => recorder.sweeps[i].t,
+    show: replayFrame, exit: replayExit,
+    stamp: i => { const s = i == null ? state.sweep : recorder.sweeps[i]; if (!s) return 'nanoVNA Web'; return `${fmtHz(s.start)} – ${fmtHz(s.stop)} · ${s.pts} pts · ${i == null ? 'live' : `sweep ${i + 1}/${recorder.sweeps.length}`} · ${new Date(s.t).toLocaleTimeString()} · ${state.vna?.ident.label || state.vna?.env.name || 'NanoVNA'}`; },
+    download, log: t => con.dim(t) });
+$('recLoadBtn').addEventListener('click', async () => {
+  try { const f = await pickFile('.json,application/json'); if (!f) return; const n = recorder.loadJson(JSON.parse(await f.text())); con.dim(`loaded recording: ${n} sweeps from ${f.name}`); clip.refresh(); }
+  catch (e) { con.err('load recording: ' + e.message); }
+});
 $('recBtn').addEventListener('click', () => { if (recorder.on) recorder.stop(); else { recorder.start(); con.dim('recording started'); } });
 $('recWfBtn').addEventListener('click', () => download(`nanovna-waterfall-s11-${stamp()}.csv`, recorder.waterfallCsv('s11')));
 $('recWf21Btn').addEventListener('click', () => download(`nanovna-waterfall-s21-${stamp()}.csv`, recorder.waterfallCsv('s21')));

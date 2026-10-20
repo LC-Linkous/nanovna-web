@@ -132,6 +132,24 @@
           <button class="btn small" id="recClearBtn" disabled>Clear</button>
         </div>
         <p class="hint">The waterfall CSV matches the plot: timestamps down, frequencies across. The sweep log is the long format for pandas.</p>
+        <div class="tools" style="margin-top:6px"><button class="btn small" id="recLoadBtn">Load recording JSON</button></div>
+        <span class="label" style="margin-top:12px">Replay</span>
+        <p class="hint" style="margin:0 0 6px">Scrub through the recording; every window redraws for that sweep. <em>Live</em> returns to the instrument.</p>
+        <input type="range" id="clipSlider" min="0" max="0" value="0" style="width:100%" disabled>
+        <div class="tools">
+          <button class="btn small" id="clipPlayBtn" aria-pressed="false" disabled>Play</button>
+          <select id="clipSpeed" aria-label="Replay speed"></select>
+          <button class="btn small" id="clipExitBtn" disabled>Live</button>
+          <span class="hint" id="clipPos" style="align-self:center">live</span>
+        </div>
+        <span class="label" style="margin-top:12px">Clip (WebM)</span>
+        <div class="tools">
+          <button class="btn small" id="clipExportBtn" disabled title="Plays the recording back at the chosen speed while encoding it">Save recording as clip</button>
+          <button class="btn small" id="clipLiveBtn" aria-pressed="false" title="Every sweep the windows draw becomes a frame, until you stop">Record clip of the windows</button>
+        </div>
+        <label class="row check"><input type="checkbox" id="clipStamp" checked> <span>Caption bar (range, sweep, time, device)</span></label>
+        <p class="hint" id="clipStatus"></p>
+        <p class="hint">A WebM of whatever the windows show, in full colour, at a fraction of a GIF's size. Plays in any browser, Slack and Discord; it does not autoplay inline on GitHub.</p>
       </div>
     </section>
 

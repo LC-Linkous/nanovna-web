@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.0 — replay and clips
+
+- **Replay**: a slider and Play / speed (0.5–8×) in the Recording section
+  scrub through the recording; every window redraws for that sweep, with the
+  waterfall rebuilt from the recording up to that point. *Live* returns to the
+  instrument. Sweeps arriving during a replay are still recorded. *Load
+  recording JSON* brings a saved recording back.
+- **Clip (WebM)**: *Save recording as clip* plays the recording back at the
+  chosen speed while the browser's MediaRecorder encodes the windows, one
+  frame per sweep; *Record clip of the windows* does the same for the live
+  display until stopped. Optional caption bar (range, sweep, time, device).
+  VP9 WebM, full colour, no library; typically tens of kB per sweep-frame.
+  `js/ui/clip.js` is shared with tinysa-web.
+
 ## v0.5.0 — windows
 
 - **Windows**: the plot area is 1, 2 or 4 panes, each with its own view tabs

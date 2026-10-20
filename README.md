@@ -117,7 +117,7 @@ collapse; the choice is remembered. Drag its right edge to resize it
 the console so it has the full width. On narrow screens the sidebar stacks
 above the plot.
 
-## What it does (v0.5)
+## What it does (v0.6)
 
 - **Sweep** — start/stop in MHz, points by model maximum / quick / custom,
   single or continuous.
@@ -149,6 +149,15 @@ above the plot.
   recording is on; save as a waterfall matrix CSV (the plot as data), a long
   sweep log CSV, a CW log CSV, or JSON. The browser-side equivalent of
   `plotting_waterfall_static.py`.
+- **Replay** — scrub through the recording with a slider or play it at 0.5–8×;
+  every window redraws for that sweep (the waterfall rebuilt from the recording
+  up to that point). Sweeps that arrive while replaying are still recorded.
+  *Live* returns to the instrument; *Load recording JSON* brings a saved one back.
+- **Clip (WebM)** — save what the windows show as a video: a recording played
+  back at the chosen speed, or the live windows until you stop, one frame per
+  rendered sweep, with an optional caption bar (range, sweep, time, device).
+  Encoded by the browser's own MediaRecorder: full colour, no library, a
+  fraction of a GIF's size; plays in any browser, Slack and Discord.
 - **Diagnostics** — one button runs a fixed set of commands, records raw
   replies and timings, and downloads a JSON to attach to an issue. This is
   how the page gets validated against hardware it hasn't seen yet.
@@ -188,7 +197,7 @@ css/
   theme.css                colour tokens: dark/light themes, trace colour schemes
   layout.css               top bar, docked sidebar, plot, console drawer
   components.css           buttons, inputs, tables
-  panes.css                the 1 / 2 / 4 window grid (shared with tinysa-web)
+  panes.css                the 1 / 2 / 4 window grid (shared with tinysa-web, as are panes.js and clip.js)
 js/
   main.js                  app state + wiring
   rf.js                    pure math: dB, SWR, Γ→Z, formatting
@@ -201,7 +210,7 @@ js/
   plot/
     rect.js  smith.js  waterfall.js  palettes.js  common.js
   ui/
-    sidebar.js  console.js  panes.js  settings.js  diagnostics.js  export.js
+    sidebar.js  console.js  panes.js  clip.js  settings.js  diagnostics.js  export.js
     calibration.js  cw.js  session.js  devicetools.js  recorder.js  about.js
 ```
 

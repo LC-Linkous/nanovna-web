@@ -65,6 +65,15 @@ export function createRecorder() {
   };
 
   /** Everything, as JSON (sweeps as plain arrays). */
+  /** Load a recording JSON made by jsonBlob() (sweeps become typed arrays). Returns the sweep count. */
+  rec.loadJson = obj => {
+    if (!obj || obj.kind !== 'recording' || !Array.isArray(obj.sweeps)) throw new Error('not a nanoVNA Web recording');
+    rec.sweeps = obj.sweeps.map(s => ({ t: +s.t || 0, start: +s.start, stop: +s.stop, pts: +s.pts, f: Float64Array.from(s.f), s11: Float32Array.from(s.s11), s21: Float32Array.from(s.s21) }));
+    rec.cw = Array.isArray(obj.cw) ? obj.cw : [];
+    rec.startedAt = obj.startedAt ? Date.parse(obj.startedAt) : rec.sweeps[0]?.t || null;
+    rec.onChange?.(); return rec.sweeps.length;
+  };
+
   rec.jsonBlob = meta => new Blob([JSON.stringify({ tool: 'nanovna-web', kind: 'recording', ...meta, startedAt: rec.startedAt && iso(rec.startedAt), sweeps: rec.sweeps.map(s => ({ ...s, f: Array.from(s.f), s11: Array.from(s.s11), s21: Array.from(s.s21) })), cw: rec.cw })], { type: 'application/json' });
 
   return rec;

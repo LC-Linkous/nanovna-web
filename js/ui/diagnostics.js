@@ -10,7 +10,7 @@ export const DIAG_COMMANDS = ['version', 'info', 'SN', 'help', 'sweep', 'frequen
 export async function collectDiagnostics(vna, sweepParams, onProgress) {
   const link = vna.link;
   const d = {
-    tool: 'nanovna-web', version: '0.5.0', when: new Date().toISOString(), userAgent: navigator.userAgent,
+    tool: 'nanovna-web', version: '0.6.0', when: new Date().toISOString(), userAgent: navigator.userAgent,
     port: link.info(), modelSelected: vna.model, modelDetected: detectModel(vna.ident.version, vna.ident.info), ident: vna.ident, commands: [],
   };
   const summary = () => d.commands.map(r => `${r.cmd}\n    ${r.error ? 'ERROR ' + r.error : `${Math.round(r.ms)} ms, ${r.lines ?? 0} lines, ${r.promptCount}×ch>${r.parsedOk != null ? (r.parsedOk ? ', parsed OK' : ', PARSE FAILED') : ''}`}`).join('\n');
