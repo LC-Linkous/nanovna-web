@@ -24,7 +24,7 @@ import { initAbout } from './ui/about.js';
 import { createPanes } from './ui/panes.js';
 import { createClip } from './ui/clip.js';
 
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.6.1';
 const $ = id => document.getElementById(id);
 const VIEW_TO_TRACE = { s11db: 'logmag', s21db: 'logmag', swr: 'swr', phase: 'phase', smith: 'smith', waterfall: 'logmag' };
 

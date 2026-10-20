@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.1 — tests
+
+- `tests/device.test.mjs`: 12 tests of the device layer over the demo device's
+  byte stream (identify, scan, frequencies/data, usage-line rejection, pause
+  and cal, the `save` no-prompt path, the CW meter's `measureAt`, `capture`),
+  plus three for `shell-link.js` (the queue, `requireEcho` / `terminators`,
+  and the unchanged NanoVNA defaults). `node --test 'tests/**/*.test.mjs'`;
+  a workflow runs them on push and PR.
+- `shell-link.js` and `panes.css` kept at byte parity with tinysa-web
+  (`lengthPrefix` option on `commandBinary`; a `meter` view rule in the grid
+  CSS that this page does not use).
+- Demo device: `cwfreq` rejects a non-numeric argument with a usage line, as
+  the firmware does.
+
 ## v0.6.0 — replay and clips
 
 - **Replay**: a slider and Play / speed (0.5–8×) in the Recording section

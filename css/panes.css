@@ -14,7 +14,7 @@
 .panes[data-layout="2"] .chart-wrap canvas { height: clamp(260px, 42vh, 520px); }
 .panes[data-layout="4"] .chart-wrap canvas { height: clamp(200px, 30vh, 360px); }
 /* a view whose content is a DOM panel, not a drawing: the canvas gives way to the slot */
-.chart-wrap[data-view="cw"] canvas { display: none; }
+.chart-wrap[data-view="cw"] canvas, .chart-wrap[data-view="meter"] canvas { display: none; }
 .pane-slot:empty { display: none; }
 .pane-slot .cw-panel { border: none; }
 .pane-slot .pane-note { padding: 24px 18px; color: var(--ink-3); font-size: .9rem; }

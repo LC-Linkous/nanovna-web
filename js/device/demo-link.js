@@ -62,7 +62,7 @@ export class DemoLink extends ShellLink {
       case 'save': { const bytes = this.enc.encode(cmd + '\r\n'); setTimeout(() => this._feed(bytes), 8); return Promise.resolve(); }   // echo only, no prompt (F V2 quirk)
       case 'recall': break;
       case 'edelay': if (a.length) this.edelayVal = a[0]; else body = this.edelayVal; break;
-      case 'cwfreq': if (!a.length) body = 'usage: cwfreq {frequency(KHz)}'; break;
+      case 'cwfreq': if (!a.length || !Number.isFinite(+a[0])) body = 'usage: cwfreq {frequency(Hz)}'; break;
       case 'beep': this.beepOn = (a[0] || '').toLowerCase() === 'on'; break;
       case 'pwm': this.pwmVal = a[0] || this.pwmVal; break;
       case 'resolution': body = '800,480'; break;

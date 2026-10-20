@@ -207,6 +207,8 @@ js/
     demo-link.js           simulated F V3, same byte stream
     models.js              per-model envelopes, detectModel()
     nanovna.js             NanoVNA class — method names mirror nvnapython
+tests/
+  device.test.mjs          the device layer over the demo device (node --test 'tests/**/*.test.mjs')
   plot/
     rect.js  smith.js  waterfall.js  palettes.js  common.js
   ui/
@@ -227,6 +229,13 @@ python -m http.server 8000
 ```
 
 Web Serial works on `localhost`, so a real device can be used this way.
+
+The device layer has tests that run without a browser or a device, against
+the demo device's byte stream (Node 18 or later):
+
+```sh
+node --test 'tests/**/*.test.mjs'
+```
 
 ## Validating against a real device
 

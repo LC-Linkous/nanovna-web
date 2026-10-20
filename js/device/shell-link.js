@@ -108,24 +108,34 @@ export class ShellLink {
     return { body, raw, ms: waitMs };
   }
 
-  /** Binary reply: skip the echo, read exactly n bytes, swallow the trailing prompt. */
-  async _commandBinary(cmd, n, { timeoutMs = 15000, quiet = false } = {}) {
+  /**
+   * Binary reply: skip the echo, read exactly n bytes, swallow the trailing prompt.
+   * lengthPrefix (tinySA sd_read): the reply starts with that many bytes of
+   * little-endian length, then the data; n is then ignored. A text reply in
+   * that position ('err: (4) no file', 'sd_read?') is thrown as an Error.
+   */
+  async _commandBinary(cmd, n, { timeoutMs = 15000, quiet = false, lengthPrefix = 0 } = {}) {
     await this._flush();
-    if (this.onTx && !quiet) this.onTx(`${cmd}  (binary, ${n} bytes)`);
+    if (this.onTx && !quiet) this.onTx(`${cmd}  (binary, ${lengthPrefix ? 'length-prefixed' : n + ' bytes'})`);
     const t0 = performance.now();
     await this._write(cmd + '\r\n');
     const echo = this.enc.encode(cmd + '\r\n');
-    let last = performance.now();
+    let last = performance.now(), echoDone = false;
     for (;;) {
-      const b = this.buf;
-      let start = 0;
-      if (b.length >= echo.length) {
+      if (!echoDone && this.buf.length >= echo.length) {
         let m = true;
-        for (let i = 0; i < echo.length; i++) if (b[i] !== echo[i]) { m = false; break; }
-        if (m) start = echo.length;
+        for (let i = 0; i < echo.length; i++) if (this.buf[i] !== echo[i]) { m = false; break; }
+        if (m) { this.buf = this.buf.slice(echo.length); echoDone = true; }
       }
-      if (b.length - start >= n) {
-        const payload = b.slice(start, start + n);
+      if (echoDone && lengthPrefix && this.buf.length >= lengthPrefix) {
+        const head = this._text(this.buf.slice(0, 64)).replace(/[\s\0]+$/, '');
+        if (/^(err:|[a-z_]+\?)/i.test(head) && head.endsWith(PROMPT)) { this._take(); throw new Error(head.replace(/\s*ch>$/, '').trim()); }
+        let len = 0; for (let i = lengthPrefix - 1; i >= 0; i--) len = len * 256 + this.buf[i];
+        if (len > 64 * 1024 * 1024) { this._take(); throw new Error(`length prefix ${len} is not a file size`); }
+        n = len; this.buf = this.buf.slice(lengthPrefix); lengthPrefix = 0;
+      }
+      if (echoDone && !lengthPrefix && this.buf.length >= n) {
+        const payload = this.buf.slice(0, n);
         let more = true; while (more) more = await this._wait(60);
         this._take();
         const ms = performance.now() - t0;
@@ -134,7 +144,7 @@ export class ShellLink {
       }
       const got = await this._wait(Math.max(10, timeoutMs - (performance.now() - last)));
       if (got) last = performance.now();
-      else if (performance.now() - last >= timeoutMs) throw new Error(`binary read of ${n} bytes stalled at ${b.length - start}`);
+      else if (performance.now() - last >= timeoutMs) throw new Error(`binary read of ${n} bytes stalled at ${this.buf.length}`);
     }
   }
 
